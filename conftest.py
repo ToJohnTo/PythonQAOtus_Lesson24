@@ -1,5 +1,8 @@
 import pytest
 import logging
+import allure
+import requests
+import time
 from selenium import webdriver
 from selenium.webdriver import FirefoxOptions, FirefoxProfile
 from selenium.webdriver.support.events import AbstractEventListener, EventFiringWebDriver
@@ -9,17 +12,41 @@ from pages.product_card import ProductCardPage
 from pages.login import LoginPage
 from pages.login_admin import LoginAdminPage
 from pages.products_table import ProductsTablePage
+from pages.upload_file_mozilla_page import UploadFileMozillaPage
 
-
-logging.basicConfig(format='%(levelname)s::%(filename)s::%(funcName)s::%(message)s', filename="logs/selenium.log")
+logging.basicConfig(format='%(levelname)s::%(filename)s::%(funcName)s::%(message)s',
+                    filename="logs/selenium.log")
 LOG_LEVEL = 10  # DEBUG
 
 
-def driver_factory(browser, selenoid, test_name):
+def url_data_exists(url):
+    # Ждем доступности url
+    wait = 10
+    while wait > 0:
+        r = requests.get(url)
+        if r.ok:
+            return True
+        else:
+            time.sleep(1)
+            wait -= 1
+    return False
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+# Это какая-то магия отсюда https://github.com/pytest-dev/pytest/issues/230#issuecomment-402580536
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    if rep.outcome != 'passed':
+        item.status = 'failed'
+    else:
+        item.status = 'passed'
+
+
+def driver_factory(browser, executor_url, test_name):
     if browser == "chrome":
         logger = logging.getLogger('chrome_fixture')
         logger.setLevel(LOG_LEVEL)
-        executor_url = f"http://{selenoid}:4444/wd/hub"
         caps = {"browserName": browser,
                 "version": "83.0",
                 "enableVnc": True,
@@ -27,7 +54,8 @@ def driver_factory(browser, selenoid, test_name):
                 "enableLog": True,
                 "screenResolution": "1280x720",
                 "name": test_name}
-        driver = EventFiringWebDriver(webdriver.Remote(command_executor=executor_url, desired_capabilities=caps),
+        driver = EventFiringWebDriver(webdriver.Remote(command_executor=executor_url + "/wd/hub",
+                                                       desired_capabilities=caps),
                                       MyListener())
         logger.info(f"Start session {driver.session_id}")
     elif browser == "firefox":
@@ -46,19 +74,42 @@ def pytest_addoption(parser):
     parser.addoption("--selenoid", action="store", default="localhost")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def browser(request):
     logger = logging.getLogger('browser_fixture')
     logger.setLevel(LOG_LEVEL)
+    selenoid = request.config.getoption("--selenoid")
+    executor_url = f"http://{selenoid}:4444"
     driver = driver_factory(request.config.getoption("--browser"),
-                            request.config.getoption("--selenoid"),
+                            executor_url,
                             request.node.name)
 
     driver.maximize_window()
 
     def fin():
-        driver.close()
-        logger.debug("Браузер закрыт")
+        log_url = executor_url + f"/logs/{driver.session_id}.log"
+        video_url = executor_url + f"/video/{driver.session_id}.mp4"
+
+        driver.quit()
+
+        # Проверяем статус
+        if request.node.status == 'failed':
+            if url_data_exists(video_url):
+                allure.attach(body=requests.get(video_url).content,
+                              attachment_type=allure.attachment_type.MP4)
+
+            if url_data_exists(log_url):
+                r = requests.get(log_url)
+                allure.attach(name="selenoid_log", body=r.text,
+                              attachment_type=allure.attachment_type.TEXT)
+
+        # Удаляем данные теста
+        if url_data_exists(video_url): requests.delete(url=video_url)
+        if url_data_exists(log_url): requests.delete(url=log_url)
+
+    allure.attach(name=driver.session_id,
+                  body=str(driver.desired_capabilities),
+                  attachment_type=allure.attachment_type.JSON)
 
     request.addfinalizer(fin)
     return driver
@@ -104,8 +155,15 @@ def login_admin_page(browser):
 def products_table_page(browser):
     page = ProductsTablePage(browser)
     page.go_to(url="http://demo.opencart.com/admin/")
-    page.login('demo', 'demo')      # page.login('user', 'bitnami1')
+    page.login('demo', 'demo')  # page.login('user', 'bitnami1')
     page.open_products_table()
+    return page
+
+
+@pytest.fixture()
+def upload_file_mozilla_page(browser):
+    page = UploadFileMozillaPage(browser)
+    page.go_to(url="https://developer.mozilla.org/ru/docs/Web/HTML/Element/Input/file")
     return page
 
 
