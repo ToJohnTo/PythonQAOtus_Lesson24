@@ -1,6 +1,0 @@
-INFO     chrome_fixture:conftest.py:60 Start session c89f41872765001d6f8213ca8fc1d227
-DEBUG    BasePage:base.py:20 Открытие url: http://demo.opencart.com/
-INFO     BasePage:test_selenium_1.py:9 ====== Started ======
-DEBUG    BasePage:base.py:34 Проверка видимости элемента с локатором: ('css selector', '#logo')
-DEBUG    BasePage:base.py:34 Проверка видимости элемента с локатором: ('css selector', '#search')
-INFO     BasePage:test_selenium_1.py:12 ====== Finished ======

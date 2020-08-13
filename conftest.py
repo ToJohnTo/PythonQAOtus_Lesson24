@@ -12,7 +12,6 @@ from pages.product_card import ProductCardPage
 from pages.login import LoginPage
 from pages.login_admin import LoginAdminPage
 from pages.products_table import ProductsTablePage
-from pages.upload_file_mozilla_page import UploadFileMozillaPage
 
 logging.basicConfig(format='%(levelname)s::%(filename)s::%(funcName)s::%(message)s',
                     filename="logs/selenium.log")
@@ -43,17 +42,11 @@ def pytest_runtest_makereport(item, call):
         item.status = 'passed'
 
 
-def driver_factory(browser, executor_url, test_name):
+def driver_factory(browser, executor_url):
     if browser == "chrome":
         logger = logging.getLogger('chrome_fixture')
         logger.setLevel(LOG_LEVEL)
-        caps = {"browserName": browser,
-                "version": "83.0",
-                "enableVnc": True,
-                "enableVideo": True,
-                "enableLog": True,
-                "screenResolution": "1280x720",
-                "name": test_name}
+        caps = {"browserName": browser}
         driver = EventFiringWebDriver(webdriver.Remote(command_executor=executor_url + "/wd/hub",
                                                        desired_capabilities=caps),
                                       MyListener())
@@ -81,8 +74,7 @@ def browser(request):
     selenoid = request.config.getoption("--selenoid")
     executor_url = f"http://{selenoid}:4444"
     driver = driver_factory(request.config.getoption("--browser"),
-                            executor_url,
-                            request.node.name)
+                            executor_url)
 
     driver.maximize_window()
 
@@ -157,13 +149,6 @@ def products_table_page(browser):
     page.go_to(url="http://demo.opencart.com/admin/")
     page.login('demo', 'demo')  # page.login('user', 'bitnami1')
     page.open_products_table()
-    return page
-
-
-@pytest.fixture()
-def upload_file_mozilla_page(browser):
-    page = UploadFileMozillaPage(browser)
-    page.go_to(url="https://developer.mozilla.org/ru/docs/Web/HTML/Element/Input/file")
     return page
 
 
