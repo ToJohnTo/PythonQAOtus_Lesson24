@@ -4,6 +4,12 @@ __pycache__/
 *$py.class
 Study/
 .idea/
+cm
+screenshots/
+Upload_file/
+
+# allure reports
+allure-report/
 
 # C extensions
 *.so
